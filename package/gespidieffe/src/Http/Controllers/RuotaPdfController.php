@@ -118,10 +118,11 @@ class RuotaPdfController extends Controller
                 $flags .= sprintf(' --rotate=+%d:%d', $deg, $page);
             }
 
+            $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
             $cmd = sprintf(
-                'qpdf %s%s -- %s 2>/dev/null',
-                escapeshellarg($src),
+                'qpdf%s %s %s 2>' . $null,
                 $flags,
+                escapeshellarg($src),
                 escapeshellarg($outPath)
             );
             exec($cmd);
@@ -169,7 +170,11 @@ class RuotaPdfController extends Controller
 
     private function qpdfPageCount(string $pdfPath): int
     {
-        $out = shell_exec(sprintf('qpdf --show-npages %s 2>/dev/null', escapeshellarg($pdfPath)));
+        // !! PRODUZIONE (Linux): ripristinare la riga originale qui sotto !!
+        // $out = shell_exec(sprintf('qpdf --show-npages %s 2>/dev/null', escapeshellarg($pdfPath)));
+
+        $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+        $out  = shell_exec(sprintf('qpdf --show-npages %s 2>%s', escapeshellarg($pdfPath), $null));
 
         return (int) trim($out ?? '0');
     }

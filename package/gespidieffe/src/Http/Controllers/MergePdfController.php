@@ -132,9 +132,10 @@ class MergePdfController extends Controller
         $outToken = $session . '_merged';
         $outPath  = $base . $outToken . '.pdf';
 
+        $null     = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
         $pageArgs = implode(' ', array_map(fn($f) => escapeshellarg($f), $orderedPaths));
         $cmd = sprintf(
-            'qpdf --empty --pages %s -- %s 2>/dev/null',
+            'qpdf --empty --pages %s -- %s 2>' . $null,
             $pageArgs,
             escapeshellarg($outPath)
         );
@@ -180,7 +181,11 @@ class MergePdfController extends Controller
 
     private function qpdfPageCount(string $pdfPath): int
     {
-        $out = shell_exec(sprintf('qpdf --show-npages %s 2>/dev/null', escapeshellarg($pdfPath)));
+        // !! PRODUZIONE (Linux): ripristinare la riga originale qui sotto !!
+        // $out = shell_exec(sprintf('qpdf --show-npages %s 2>/dev/null', escapeshellarg($pdfPath)));
+
+        $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+        $out  = shell_exec(sprintf('qpdf --show-npages %s 2>%s', escapeshellarg($pdfPath), $null));
 
         return (int) trim($out ?? '0');
     }

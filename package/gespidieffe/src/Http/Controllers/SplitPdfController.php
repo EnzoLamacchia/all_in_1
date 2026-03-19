@@ -110,8 +110,10 @@ class SplitPdfController extends Controller
             $outName = $uuid . '_split_' . $i . '_' . $label . '.pdf';
             $outPath = $base . $outName;
 
+            $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
             $cmd = sprintf(
-                'qpdf %s --pages . %s -- %s 2>/dev/null',
+                'qpdf %s --pages %s %s -- %s 2>' . $null,
+                escapeshellarg($src),
                 escapeshellarg($src),
                 escapeshellarg("{$from}-{$to}"),
                 escapeshellarg($outPath)
@@ -211,7 +213,11 @@ class SplitPdfController extends Controller
 
     private function qpdfPageCount(string $pdfPath): int
     {
-        $out = shell_exec(sprintf('qpdf --show-npages %s 2>/dev/null', escapeshellarg($pdfPath)));
+        // !! PRODUZIONE (Linux): ripristinare la riga originale qui sotto !!
+        // $out = shell_exec(sprintf('qpdf --show-npages %s 2>/dev/null', escapeshellarg($pdfPath)));
+
+        $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+        $out  = shell_exec(sprintf('qpdf --show-npages %s 2>%s', escapeshellarg($pdfPath), $null));
 
         return (int) trim($out ?? '0');
     }

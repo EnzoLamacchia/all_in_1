@@ -127,8 +127,9 @@ class NumeraPdfController extends Controller
 
         // ── 3. pdftk stamp: sovrappone overlay su originale ──────
         $outPath = $base . $uuid . '_numerato.pdf';
+        $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
         $cmd = sprintf(
-            'pdftk %s multistamp %s output %s 2>/dev/null',
+            'pdftk %s multistamp %s output %s 2>' . $null,
             escapeshellarg($src),
             escapeshellarg($overlayPath),
             escapeshellarg($outPath)
@@ -236,7 +237,8 @@ class NumeraPdfController extends Controller
     private function qpdfPageSizes(string $pdfPath, int $totPages): array
     {
         // qpdf --json emette le dimensioni in punti (pt)
-        $json = shell_exec(sprintf('qpdf --json %s 2>/dev/null', escapeshellarg($pdfPath)));
+        $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+        $json = shell_exec(sprintf('qpdf --json %s 2>' . $null, escapeshellarg($pdfPath)));
         $sizes = [];
 
         if ($json) {
@@ -313,7 +315,11 @@ class NumeraPdfController extends Controller
 
     private function qpdfPageCount(string $pdfPath): int
     {
-        $out = shell_exec(sprintf('qpdf --show-npages %s 2>/dev/null', escapeshellarg($pdfPath)));
+        // !! PRODUZIONE (Linux): ripristinare la riga originale qui sotto !!
+        // $out = shell_exec(sprintf('qpdf --show-npages %s 2>/dev/null', escapeshellarg($pdfPath)));
+
+        $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+        $out  = shell_exec(sprintf('qpdf --show-npages %s 2>%s', escapeshellarg($pdfPath), $null));
 
         return (int) trim($out ?? '0');
     }

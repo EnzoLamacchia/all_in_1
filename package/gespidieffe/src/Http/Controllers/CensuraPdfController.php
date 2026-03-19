@@ -113,13 +113,15 @@ class CensuraPdfController extends Controller
         // Lista di file PDF parziali che verranno uniti alla fine
         $parts = [];
 
+        $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
         for ($p = 1; $p <= $pageCount; $p++) {
             $partPath = $base . $token . '_part_p' . $p . '.pdf';
 
             if (!isset($rectsByPage[$p])) {
                 // ── Pagina originale: copia con qpdf (vettoriale, peso minimo) ──
                 $cmd = sprintf(
-                    'qpdf %s --pages . %d -- %s 2>/dev/null',
+                    'qpdf %s --pages %s %d -- %s 2>' . $null,
+                    escapeshellarg($srcPath),
                     escapeshellarg($srcPath),
                     $p,
                     escapeshellarg($partPath)
@@ -130,7 +132,7 @@ class CensuraPdfController extends Controller
                 $pngPath = $base . $token . '_rast_p' . $p . '.png';
 
                 $gs = sprintf(
-                    'gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r%d -dFirstPage=%d -dLastPage=%d -sOutputFile=%s %s 2>/dev/null',
+                    'gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r%d -dFirstPage=%d -dLastPage=%d -sOutputFile=%s %s 2>' . $null,
                     $dpi, $p, $p,
                     escapeshellarg($pngPath),
                     escapeshellarg($srcPath)
@@ -178,7 +180,7 @@ class CensuraPdfController extends Controller
 
         $pageArgs = implode(' ', array_map(fn($f) => escapeshellarg($f), $parts));
         $mergeCmd = sprintf(
-            'qpdf --empty --pages %s -- %s 2>/dev/null',
+            'qpdf --empty --pages %s -- %s 2>' . $null,
             $pageArgs,
             escapeshellarg($outPath)
         );
@@ -211,9 +213,10 @@ class CensuraPdfController extends Controller
             $rectsByPage[(int) $rect['page']][] = $rect;
         }
 
+        $null       = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
         $pngPattern = $base . $token . '_rast_p%d.png';
         exec(sprintf(
-            'gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r%d -sOutputFile=%s %s 2>/dev/null',
+            'gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r%d -sOutputFile=%s %s 2>' . $null,
             $dpi,
             escapeshellarg($pngPattern),
             escapeshellarg($srcPath)
@@ -302,7 +305,12 @@ class CensuraPdfController extends Controller
 
     private function qpdfPageCount(string $pdfPath): int
     {
-        $out = shell_exec(sprintf('qpdf --show-npages %s 2>/dev/null', escapeshellarg($pdfPath)));
+        // !! PRODUZIONE (Linux): ripristinare la riga originale qui sotto !!
+        // $out = shell_exec(sprintf('qpdf --show-npages %s 2>/dev/null', escapeshellarg($pdfPath)));
+
+        // Compatibile Windows (dev) e Linux (prod) — rimuovere se si torna alla riga originale
+        $null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+        $out  = shell_exec(sprintf('qpdf --show-npages %s 2>%s', escapeshellarg($pdfPath), $null));
 
         return (int) trim($out ?? '0');
     }
