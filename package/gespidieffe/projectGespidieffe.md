@@ -1,4 +1,4 @@
-# projectGespidieffe.md
+﻿# projectGespidieffe.md
 
 Documento di contesto per il package `elamacchia/gespidieffe`.
 Da leggere all'inizio di ogni sessione di lavoro su questo package.
@@ -135,6 +135,7 @@ Prefix: `/gespidieffe` — Named prefix: `gespidieffe.`
 | GET | `/gespidieffe/merge` | `MergePdfController@index` | `gespidieffe.merge` |
 | POST | `/gespidieffe/merge/upload` | `MergePdfController@upload` | `gespidieffe.merge.upload` |
 | GET | `/gespidieffe/merge/editor/{session}` | `MergePdfController@editor` | `gespidieffe.merge.editor` |
+| GET | `/gespidieffe/merge/aggiungi/{session}` | `MergePdfController@aggiungi` | `gespidieffe.merge.aggiungi` |
 | POST | `/gespidieffe/merge/applica` | `MergePdfController@applica` | `gespidieffe.merge.applica` |
 | GET | `/gespidieffe/merge/download/{file}` | `MergePdfController@download` | `gespidieffe.merge.download` |
 | DELETE/POST | `/gespidieffe/merge/elimina/{session}` | `MergePdfController@elimina` | `gespidieffe.merge.elimina` |
@@ -194,11 +195,18 @@ Ogni funzione del package segue questo schema:
 | Funzione | Stato | Controller | Note |
 |---|---|---|---|
 | Censura PDF | ✅ Implementata | `CensuraPdfController` | Flusso ibrido vettoriale/raster. Rettangoli bruciati direttamente sui pixel PNG via GD — contenuto irrecuperabile |
-| Merge PDF | ✅ Implementata | `MergePdfController` | Upload multiplo + drag&drop riordinamento (SortableJS, card JS puro senza x-for) + qpdf merge. Bollino blu = ID fisso upload, ordine visuale = ordine merge |
+| Merge PDF | ✅ Implementata | `MergePdfController` | Upload multiplo + drag&drop riordinamento (SortableJS, card JS puro senza x-for) + qpdf merge. Bollino blu = ID fisso upload, ordine visuale = ordine merge | Upload duale: nuova sessione (min 2 file) o aggiunta a sessione esistente via aggiungi/{session} (min 1 file). Pulsante Aggiungi file in editor naviga senza eliminare la sessione (flag _mergeSkipCleanup). Alert JS se submit con 1 solo file in modalita normale |
 | Split PDF | ✅ Implementata | `SplitPdfController` | Modalità singole/intervalli, download PDF singolo o ZIP |
-| Organizza pagine | ✅ Implementata | `OrganizzaPdfController` | Griglia drag&drop (Sortable.js) + duplica/elimina + qpdf ricostruzione |
+| Organizza pagine | ✅ Implementata | `OrganizzaPdfController` | Griglia drag&drop (Sortable.js) + duplica/elimina + spostamento singolo e blocchi multipli (Ctrl+click) + qpdf ricostruzione. DOM card gestito interamente da JS (no x-for), stesso pattern del merge. |
 | Ruota pagine | ✅ Implementata | `RuotaPdfController` | Click per +90°/card, "Ruota tutto", badge gradi, qpdf --rotate |
 | Numera pagine | ✅ Implementata | `NumeraPdfController` | TCPDF overlay + pdftk stamp, testo originale selezionabile; controlli editor centrati nella colonna sinistra |
+
+---
+
+## UX globale (layout condiviso)
+
+- **Dropdown "Funzioni"** nella navbar (`layouts/app.blade.php`): permette di navigare a qualsiasi funzione del package senza tornare alla home. Usa Alpine.js `x-data` con `@click.outside`. Posizionato a destra con `mr-6` per separarlo da nome utente e Dashboard.
+- Il dropdown è presente in **tutte** le pagine (upload ed editor) di ogni funzione.
 
 ---
 
@@ -223,3 +231,4 @@ Tutte le funzioni previste sono state implementate. Nessun obiettivo pendente.
 - **Redirect stderr cross-platform**: tutti i comandi shell usano `$null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null'` e `2>' . $null` — funziona sia in sviluppo (Windows/Laragon) che in produzione (Linux)
 - **pdftk multistamp**: `pdftk input.pdf multistamp overlay.pdf output output.pdf` — sovrappone pagina N dell'overlay alla pagina N del documento originale. Usare `multistamp` (non `stamp`): `stamp` applica solo la pagina 1 dell'overlay a tutte le pagine. Richiede `pdftk` installato nel container (aggiunto al Dockerfile riga 17)
 - **Numera pagine**: TCPDF genera un overlay PDF trasparente con soli numeri (una pagina per ogni pagina del documento), `pdftk multistamp` lo applica all'originale. Le dimensioni di ogni pagina vengono lette con `qpdf --json`
+- **Organizza pagine — pattern DOM JS puro**: l'editor usa lo stesso pattern del merge — niente `x-for` Alpine, le card sono costruite con `_buildGrid()` / `_creaCard()` e inserite/spostate nel DOM direttamente. Sortable sincronizza l'array `window._orgPages` con `splice(oldIndex,1)` + `splice(newIndex,0,moved)` per il singolo; per il blocco multiplo sposta i nodi DOM con `insertBefore` senza ricostruire le card (i canvas rimangono intatti). L'ordine al salvataggio viene letto dal DOM (`querySelectorAll('#gridContainer > [data-uid]')`). I pulsanti azione usano `data-action-uid` (non `data-uid`) per non essere intercettati dai querySelectorAll sulle card.
