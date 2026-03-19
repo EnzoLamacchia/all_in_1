@@ -193,8 +193,8 @@ Ogni funzione del package segue questo schema:
 
 | Funzione | Stato | Controller | Note |
 |---|---|---|---|
-| Censura PDF | ✅ Implementata | `CensuraPdfController` | Flusso ibrido vettoriale/raster |
-| Merge PDF | ✅ Implementata | `MergePdfController` | Upload multiplo + drag&drop riordinamento + qpdf merge |
+| Censura PDF | ✅ Implementata | `CensuraPdfController` | Flusso ibrido vettoriale/raster. Rettangoli bruciati direttamente sui pixel PNG via GD — contenuto irrecuperabile |
+| Merge PDF | ✅ Implementata | `MergePdfController` | Upload multiplo + drag&drop riordinamento (SortableJS, card JS puro senza x-for) + qpdf merge. Bollino blu = ID fisso upload, ordine visuale = ordine merge |
 | Split PDF | ✅ Implementata | `SplitPdfController` | Modalità singole/intervalli, download PDF singolo o ZIP |
 | Organizza pagine | ✅ Implementata | `OrganizzaPdfController` | Griglia drag&drop (Sortable.js) + duplica/elimina + qpdf ricostruzione |
 | Ruota pagine | ✅ Implementata | `RuotaPdfController` | Click per +90°/card, "Ruota tutto", badge gradi, qpdf --rotate |
@@ -212,12 +212,14 @@ Tutte le funzioni previste sono state implementate. Nessun obiettivo pendente.
 
 - **TCPDF**: usare `new \TCPDF(...)` (namespace globale, non importato)
 - **FPDI + TCPDF**: per sovrapporre testo su PDF esistente — `$pdf->setSourceFile()`, `$pdf->importPage()`, `$pdf->useImportedPage()`
-- **Coordinate PDF**: i rettangoli passati dal frontend sono in **punti PDF** (pt). Conversione in mm: `mm = pt * (25.4 / 72.0)`
+- **Coordinate PDF**: i rettangoli passati dal frontend sono in **punti PDF** (pt). Conversione in mm: `mm = pt * (25.4 / 72.0)`. Conversione in pixel (per GD): `px = pt * (dpi / 72.0)` dove dpi=200
+- **Censura sicura**: i rettangoli vengono bruciati sul PNG con `imagefilledrectangle()` (GD) prima di inserire l'immagine in TCPDF — nessun layer vettoriale sovrapposto, contenuto irrecuperabile anche copiando dal PDF
 - **Orientamento pagina TCPDF**: se `larghezza > altezza` → `'L'` (landscape), altrimenti `'P'` (portrait)
 - **qpdf merge**: `qpdf --empty --pages file1 file2 ... -- output.pdf`
 - **qpdf pagina singola**: `qpdf source.pdf --pages . {N} -- output.pdf`
 - **qpdf rotazione**: `qpdf input.pdf --rotate=+90:1 --rotate=+180:3 -- output.pdf`
 - **Ghostscript rasterizza pagina**: `gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r200 -dFirstPage={N} -dLastPage={N} -sOutputFile=out.png input.pdf`
 - **Storage path**: `storage_path('app/gespidieffe/tmp/')` → `/var/www/html/storage/app/gespidieffe/tmp/` nel container
+- **Redirect stderr cross-platform**: tutti i comandi shell usano `$null = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null'` e `2>' . $null` — funziona sia in sviluppo (Windows/Laragon) che in produzione (Linux)
 - **pdftk multistamp**: `pdftk input.pdf multistamp overlay.pdf output output.pdf` — sovrappone pagina N dell'overlay alla pagina N del documento originale. Usare `multistamp` (non `stamp`): `stamp` applica solo la pagina 1 dell'overlay a tutte le pagine. Richiede `pdftk` installato nel container (aggiunto al Dockerfile riga 17)
 - **Numera pagine**: TCPDF genera un overlay PDF trasparente con soli numeri (una pagina per ogni pagina del documento), `pdftk multistamp` lo applica all'originale. Le dimensioni di ogni pagina vengono lette con `qpdf --json`

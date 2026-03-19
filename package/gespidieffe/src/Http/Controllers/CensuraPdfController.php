@@ -128,7 +128,10 @@ class CensuraPdfController extends Controller
                 );
                 exec($cmd);
             } else {
-                // ── Pagina censurata: rasterizza + rettangoli TCPDF ──
+                // ── Pagina censurata: rasterizza → brucia i rettangoli nel PNG → PDF ──
+                // I rettangoli vengono "bruciati" direttamente sui pixel dell'immagine
+                // tramite GD, prima di creare il PDF. Nessun layer vettoriale separato:
+                // il contenuto originale è irrecuperabile anche copiando dal PDF.
                 $pngPath = $base . $token . '_rast_p' . $p . '.png';
 
                 $gs = sprintf(
@@ -141,7 +144,37 @@ class CensuraPdfController extends Controller
 
                 abort_unless(file_exists($pngPath), 500, "Impossibile rasterizzare la pagina $p.");
 
-                [$pxW, $pxH] = getimagesize($pngPath);
+                // ── Brucia i rettangoli nel PNG con GD ──────────────────
+                $img = imagecreatefrompng($pngPath);
+                abort_unless($img !== false, 500, "Impossibile aprire il PNG della pagina $p.");
+
+                $pxW = imagesx($img);
+                $pxH = imagesy($img);
+                $pxPerPt = $dpi / 72.0; // fattore di conversione pt → pixel
+
+                foreach ($rectsByPage[$p] as $rect) {
+                    $color = $rect['color'] === 'black'
+                        ? imagecolorallocate($img, 0, 0, 0)
+                        : imagecolorallocate($img, 255, 255, 255);
+
+                    $x1 = (int) round((float) $rect['x'] * $pxPerPt);
+                    $y1 = (int) round((float) $rect['y'] * $pxPerPt);
+                    $x2 = (int) round(((float) $rect['x'] + (float) $rect['w']) * $pxPerPt);
+                    $y2 = (int) round(((float) $rect['y'] + (float) $rect['h']) * $pxPerPt);
+
+                    // Clamp ai bordi dell'immagine
+                    $x1 = max(0, min($x1, $pxW - 1));
+                    $y1 = max(0, min($y1, $pxH - 1));
+                    $x2 = max(0, min($x2, $pxW - 1));
+                    $y2 = max(0, min($y2, $pxH - 1));
+
+                    imagefilledrectangle($img, $x1, $y1, $x2, $y2, $color);
+                }
+
+                imagepng($img, $pngPath);
+                imagedestroy($img);
+                // ────────────────────────────────────────────────────────
+
                 $wMm = ($pxW / $dpi) * 25.4;
                 $hMm = ($pxH / $dpi) * 25.4;
 
@@ -152,19 +185,8 @@ class CensuraPdfController extends Controller
                 $pdf->setPrintFooter(false);
 
                 $pdf->AddPage($wMm > $hMm ? 'L' : 'P', [$wMm, $hMm]);
+                // Solo l'immagine — nessun rettangolo TCPDF sopra
                 $pdf->Image($pngPath, 0, 0, $wMm, $hMm, 'PNG', '', '', false, 300, '', false, false, 0);
-
-                foreach ($rectsByPage[$p] as $rect) {
-                    $color = $rect['color'] === 'black' ? [0, 0, 0] : [255, 255, 255];
-                    $pdf->SetFillColor(...$color);
-                    $pdf->Rect(
-                        (float) $rect['x'] * $ptToMm,
-                        (float) $rect['y'] * $ptToMm,
-                        (float) $rect['w'] * $ptToMm,
-                        (float) $rect['h'] * $ptToMm,
-                        'F'
-                    );
-                }
 
                 $pdf->Output($partPath, 'F');
                 @unlink($pngPath);
