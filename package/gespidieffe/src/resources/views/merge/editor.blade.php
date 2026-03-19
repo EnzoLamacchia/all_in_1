@@ -67,6 +67,16 @@
             <span x-text="saving ? 'Elaborazione…' : 'Unisci e scarica PDF'"></span>
         </button>
 
+        {{-- Aggiungi file --}}
+        <button @click="aggiungiFili()"
+                class="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium
+                       border border-blue-300 bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Aggiungi file…
+        </button>
+
         {{-- Nuovo merge --}}
         <button @click="nuovoMerge()"
                 class="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium
@@ -301,10 +311,17 @@ function mergeEditor() {
             this.eliminaSessione();
             window.location.href = '{{ route('gespidieffe.merge') }}';
         },
+
+        aggiungiFili() {
+            // Naviga alla pagina aggiungi senza eliminare la sessione
+            window._mergeSkipCleanup = true;
+            window.location.href = '{{ route('gespidieffe.merge.aggiungi', ['session' => $session]) }}';
+        },
     };
 }
 
 window.addEventListener('beforeunload', () => {
+    if (window._mergeSkipCleanup) return;
     const m = window._mergeEditor;
     if (!m) return;
     const blob = new Blob(

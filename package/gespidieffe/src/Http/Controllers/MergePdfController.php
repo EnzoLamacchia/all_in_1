@@ -27,13 +27,50 @@ class MergePdfController extends Controller
 
     public function upload(Request $request)
     {
+        $existingSession = $request->input('existing_session');
+        $base            = storage_path('app/' . $this->folder . '/');
+
+        // ── Caso A: aggiunta a sessione esistente ────────────────
+        if ($existingSession) {
+            $request->validate([
+                'pdfs'   => ['required', 'array', 'min:1', 'max:20'],
+                'pdfs.*' => ['required', 'file', 'mimes:pdf', 'max:51200'],
+            ]);
+
+            $manifestPath = $base . $existingSession . '_manifest.json';
+            abort_unless(file_exists($manifestPath), 404, 'Sessione non trovata.');
+
+            $manifest  = json_decode(file_get_contents($manifestPath), true);
+            $nextIndex = max(array_column($manifest['files'], 'index')) + 1;
+
+            foreach ($request->file('pdfs') as $file) {
+                $filename = $existingSession . '_f' . $nextIndex . '.pdf';
+                Storage::disk($this->disk)->putFileAs($this->folder, $file, $filename);
+                $manifest['files'][] = [
+                    'index'    => $nextIndex,
+                    'filename' => $filename,
+                    'original' => $file->getClientOriginalName(),
+                    'pages'    => $this->qpdfPageCount($base . $filename),
+                ];
+                $manifest['order'][] = $nextIndex;
+                $nextIndex++;
+            }
+
+            Storage::disk($this->disk)->put(
+                $this->folder . '/' . $existingSession . '_manifest.json',
+                json_encode($manifest)
+            );
+
+            return redirect()->route('gespidieffe.merge.editor', ['session' => $existingSession]);
+        }
+
+        // ── Caso B: nuova sessione (flusso normale) ──────────────
         $request->validate([
             'pdfs'   => ['required', 'array', 'min:2', 'max:20'],
             'pdfs.*' => ['required', 'file', 'mimes:pdf', 'max:51200'],
         ]);
 
         $session = Str::uuid()->toString();
-        $base    = storage_path('app/' . $this->folder . '/');
 
         $files = [];
         foreach ($request->file('pdfs') as $i => $file) {
@@ -47,7 +84,6 @@ class MergePdfController extends Controller
             ];
         }
 
-        // Salva il manifest della sessione in JSON
         $manifest = [
             'session' => $session,
             'files'   => $files,
@@ -59,6 +95,23 @@ class MergePdfController extends Controller
         );
 
         return redirect()->route('gespidieffe.merge.editor', ['session' => $session]);
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Step 1c – Aggiungi file a sessione esistente (pagina form)
+    // ─────────────────────────────────────────────────────────────
+
+    public function aggiungi(string $session)
+    {
+        $manifestPath = storage_path('app/' . $this->folder . '/' . $session . '_manifest.json');
+        abort_unless(file_exists($manifestPath), 404, 'Sessione non trovata.');
+
+        $manifest = json_decode(file_get_contents($manifestPath), true);
+
+        return view('gespidieffe::merge.upload', [
+            'existingSession' => $session,
+            'existingFiles'   => $manifest['files'],
+        ]);
     }
 
     // ─────────────────────────────────────────────────────────────
