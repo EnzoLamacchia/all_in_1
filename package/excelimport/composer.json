@@ -1,0 +1,30 @@
+{
+    "name": "elamacchia/excel-import",
+    "description": "A flexible Laravel package to import Excel files into a MySQL database",
+    "type": "library",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Enzo Lamacchia",
+            "email": "e.lamacchia@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^7.3|^8.0",
+        "laravel/framework": "^8.0",
+        "maatwebsite/excel": "^3.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Elamacchia\\Excelimport\\": "src/"
+        }
+    },
+    "minimum-stability": "beta",
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Elamacchia\\Excelimport\\ExcelimportServiceProvider"
+            ]
+        }
+    }
+}

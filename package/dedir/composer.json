@@ -1,0 +1,25 @@
+{
+    "name": "elamacchia/dedir",
+    "description": "Gestione archivio determinazioni dirigenziali",
+    "type": "library",
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Elamacchia\\Dedir\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "Enzo Lamacchia",
+            "email": "e.lamacchia@gmail.com"
+        }
+    ],
+    "minimum-stability": "beta",
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Elamacchia\\Dedir\\DedirServiceProvider"
+            ]
+        }
+    }
+}
