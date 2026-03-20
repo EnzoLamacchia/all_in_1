@@ -9,14 +9,27 @@ use Elamacchia\Gespidieffe\Http\Controllers\RuotaPdfController;
 use Elamacchia\Gespidieffe\Http\Controllers\SplitPdfController;
 use Illuminate\Support\Facades\Route;
 
+// --- Home pubblica (accessibile anche ai guest) ---
 Route::group([
-    'middleware' => ['web', 'auth:sanctum', 'verified'],
+    'middleware' => ['web'],
     'prefix'     => 'gespidieffe',
     'as'         => 'gespidieffe.',
 ], function () {
-
-    // --- Home ---
     Route::get('/', [GespidieffeController::class, 'index'])->name('home');
+});
+
+// --- Funzioni protette: autenticazione + permesso package ---
+// Route::group([
+//     'middleware' => ['web', 'auth:sanctum', 'verified'],          // <-- middleware originale (senza permesso)
+//     'prefix'     => 'gespidieffe',
+//     'as'         => 'gespidieffe.',
+// ], function () {
+//     Route::get('/', [GespidieffeController::class, 'index'])->name('home');  // <-- home era qui
+Route::group([
+    'middleware' => ['web', 'auth:sanctum', 'verified', 'permission:usa gespidieffe'],
+    'prefix'     => 'gespidieffe',
+    'as'         => 'gespidieffe.',
+], function () {
 
     // --- Censura PDF ---
     Route::get('/censura',               [CensuraPdfController::class, 'index'])->name('censura');
