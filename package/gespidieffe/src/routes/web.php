@@ -7,6 +7,7 @@ use Elamacchia\Gespidieffe\Http\Controllers\NumeraPdfController;
 use Elamacchia\Gespidieffe\Http\Controllers\OrganizzaPdfController;
 use Elamacchia\Gespidieffe\Http\Controllers\RuotaPdfController;
 use Elamacchia\Gespidieffe\Http\Controllers\SplitPdfController;
+use Elamacchia\Gespidieffe\Http\Controllers\StatisticheController;
 use Illuminate\Support\Facades\Route;
 
 // --- Tutte le route di gespidieffe sono pubbliche (accessibili anche ai guest) ---
@@ -23,6 +24,11 @@ Route::group([
 
     // --- Home ---
     Route::get('/', [GespidieffeController::class, 'index'])->name('home');
+
+    // --- Statistiche (richiede autenticazione + permesso 'usa gespidieffe') ---
+    Route::get('/statistiche', [StatisticheController::class, 'index'])
+        ->middleware(['auth:sanctum', 'verified', 'permission:usa gespidieffe'])
+        ->name('statistiche');
 
     // --- Censura PDF ---
     Route::get('/censura',               [CensuraPdfController::class, 'index'])->name('censura');

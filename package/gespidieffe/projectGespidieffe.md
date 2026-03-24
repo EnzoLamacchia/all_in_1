@@ -56,7 +56,16 @@ package/gespidieffe/
 └── src/
     ├── GespidieffeServiceProvider.php
     ├── Console/
-    │   └── PulisciTmpCommand.php
+    │   ├── PulisciTmpCommand.php
+    │   └── AzzeraContatoriCommand.php          ← NUOVO
+    ├── database/migrations/
+    │   ├── ..._create_gespidieffe_contatori_table.php          ← NUOVO
+    │   └── ..._create_gespidieffe_storico_settimanale_table.php ← NUOVO
+    ├── Models/
+    │   ├── GespidieffeContatore.php             ← NUOVO
+    │   └── GespidieffeStoricoSettimanale.php    ← NUOVO
+    ├── Services/
+    │   └── ContatorePdfService.php              ← NUOVO
     ├── Http/Controllers/
     │   ├── GespidieffeController.php
     │   ├── CensuraPdfController.php
@@ -64,7 +73,8 @@ package/gespidieffe/
     │   ├── SplitPdfController.php
     │   ├── OrganizzaPdfController.php
     │   ├── RuotaPdfController.php
-    │   └── NumeraPdfController.php
+    │   ├── NumeraPdfController.php
+    │   └── StatisticheController.php            ← NUOVO
     ├── routes/
     │   └── web.php
     └── resources/views/
@@ -85,9 +95,11 @@ package/gespidieffe/
         ├── ruota/
         │   ├── upload.blade.php
         │   └── editor.blade.php
-        └── numera/
-            ├── upload.blade.php
-            └── editor.blade.php
+        ├── numera/
+        │   ├── upload.blade.php
+        │   └── editor.blade.php
+        └── statistiche/
+            └── index.blade.php                  ← NUOVO
 ```
 
 ### Percorso assoluto (WSL)
@@ -169,6 +181,7 @@ Prefix: `/gespidieffe` — Named prefix: `gespidieffe.`
 | GET | `/gespidieffe/numera/download/{file}` | `NumeraPdfController@download` | `gespidieffe.numera.download` |
 | DELETE/POST | `/gespidieffe/numera/elimina/{file}` | `NumeraPdfController@elimina` | `gespidieffe.numera.elimina` |
 | GET | `/gespidieffe/numera/pdf/{file}` | `NumeraPdfController@servePdf` | `gespidieffe.numera.pdf` |
+| GET | `/gespidieffe/statistiche` | `StatisticheController@index` | `gespidieffe.statistiche` |
 
 ---
 
@@ -209,6 +222,24 @@ Ogni funzione del package segue questo schema:
 - Il dropdown è presente in **tutte** le pagine (upload ed editor) di ogni funzione.
 
 ---
+
+## Sistema contatori utilizzo
+
+Implementato sistema di tracciamento delle elaborazioni PDF per funzione.
+
+### Tabelle DB
+- `gespidieffe_contatori` — un record per servizio con contatori giornaliero, settimanale, globale
+- `gespidieffe_storico_settimanale` — storico dei valori settimanali salvati prima dell'azzeramento
+
+### Logica azzeramento
+- **Giornaliero**: ogni notte alle 00:00 via `gespidieffe:azzera-contatori` → azzera `contatore_giornaliero`
+- **Settimanale**: ogni lunedì alle 00:00 (lo stesso command) → salva lo storico su `gespidieffe_storico_settimanale` poi azzera `contatore_settimanale`
+- **Globale**: non si azzera mai
+
+### File coinvolti
+- `Services/ContatorePdfService::incrementa(string $servizio)` — chiamato da ogni controller nel metodo `applica()`
+- `Console/AzzeraContatoriCommand` — schedulato `dailyAt('00:00')` nel ServiceProvider
+- Route `/gespidieffe/statistiche` — protetta da `auth:sanctum` + `verified` + `permission:usa gespidieffe`
 
 ## Prossimo obiettivo
 
