@@ -13,12 +13,14 @@ Fa parte dell'ecosistema **AdmEL** ed è progettato per essere integrato come pa
 
 | Funzione | Descrizione |
 |---|---|
-| **Censura PDF** | Disegna rettangoli neri su aree sensibili del documento; supporto ibrido vettoriale/raster |
+| **Censura PDF** | Disegna rettangoli neri su aree sensibili del documento; supporto ibrido vettoriale/raster; contenuto irrecuperabile |
 | **Unione PDF (Merge)** | Carica più file PDF, riordinali con drag & drop, uniscili in un unico documento |
 | **Divisione PDF (Split)** | Estrae singole pagine o intervalli; download del singolo PDF o di uno ZIP con tutti i file estratti |
 | **Organizza pagine** | Griglia drag & drop per riordinare, duplicare o eliminare singole pagine |
 | **Ruota pagine** | Ruota singole pagine o l'intero documento a passi di 90°; badge visivo con i gradi correnti |
 | **Numerazione pagine** | Aggiunge numeri di pagina con posizione, font, dimensione e colore personalizzabili; testo originale rimane selezionabile |
+| **Unisci e Sistema** | Flusso in due step: prima unisce più PDF (come Merge), poi permette di riorganizzare liberamente le singole pagine del risultato |
+| **PDF to Word** | Converte PDF in `.docx` editabile; rileva automaticamente se il PDF è nativo, ibrido o scansionato e applica la strategia ottimale |
 
 ---
 
@@ -40,20 +42,56 @@ Fa parte dell'ecosistema **AdmEL** ed è progettato per essere integrato come pa
 | `setasign/fpdi` | ^2.3 |
 | `tecnickcom/tcpdf` | ^6.5 |
 
-### Dipendenze di sistema (nel container Docker)
-
-I seguenti strumenti devono essere presenti nel container PHP:
+### Dipendenze di sistema
 
 | Strumento | Utilizzo |
 |---|---|
-| `qpdf` | Merge, split, rotazione, conteggio pagine, estrazione in formato JSON |
-| `ghostscript` (`gs`) | Rasterizzazione di pagine PDF in PNG (per la censura raster) |
-| `pdftk` | Applicazione overlay di numerazione pagine (`multistamp`) |
+| `qpdf` | Merge, split, rotazione, conteggio pagine |
+| `ghostscript` (`gs` / `gswin64c`) | Rasterizzazione pagine PDF in PNG |
+| `pdftk` | Overlay numerazione pagine (`multistamp`) |
+| `python` 3.8+ con `pdf2docx` | Conversione PDF nativo → DOCX |
+| `tesseract` + lang `ita` | OCR su PDF scansionati |
+| `poppler-utils` (`pdftotext`, `pdfimages`, `pdfinfo`) | Analisi e estrazione testo PDF |
+| `pandoc` | Conversione testo → DOCX (PDF ibridi) |
+| `libreoffice` (headless) | Assemblaggio DOCX da OCR (PDF scansionati) |
 
-Nel Dockerfile (Laravel Sail, runtime PHP 8.1) questi pacchetti vengono installati con:
+#### Installazione su Linux (AlmaLinux/RHEL 8)
+```bash
+dnf install -y ghostscript qpdf poppler-utils libreoffice-headless libreoffice-writer tesseract tesseract-langpack-ita
+# Pandoc (non nei repo standard):
+curl -sLO https://github.com/jgm/pandoc/releases/download/3.1.13/pandoc-3.1.13-linux-amd64.tar.gz
+tar xvzf pandoc-3.1.13-linux-amd64.tar.gz && cp pandoc-3.1.13/bin/pandoc /usr/local/bin/
+# pdf2docx in virtualenv dedicato:
+python3.8 -m venv /opt/gespidieffe-venv
+/opt/gespidieffe-venv/bin/pip install pdf2docx
+```
 
-```dockerfile
-apt-get install -y ghostscript qpdf pdftk
+#### Installazione su Windows (Laragon)
+- Python: bundled con Laragon — `pip install pdf2docx`
+- Tesseract: https://github.com/UB-Mannheim/tesseract/wiki (con language pack `ita`)
+- Poppler: https://github.com/oschwartz10612/poppler-windows/releases
+- Pandoc: https://pandoc.org/installing.html
+- LibreOffice: https://www.libreoffice.org/download/libreoffice/
+- Ghostscript: https://www.ghostscript.com/releases/gsdnld.html
+
+---
+
+## Variabili .env
+
+### Linux — solo Python richiede path esplicito
+```env
+GESPIDIEFFE_PYTHON_BIN=/opt/gespidieffe-venv/bin/python
+```
+
+### Windows (Laragon) — tutti i binari con percorso assoluto (forward slash obbligatori)
+```env
+GESPIDIEFFE_PYTHON_BIN="C:/laragon8/bin/python/python-3.13/python.exe"
+GESPIDIEFFE_LIBREOFFICE_BIN="C:/Program Files/LibreOffice/program/soffice.exe"
+GESPIDIEFFE_TESSERACT_BIN="C:/Program Files/Tesseract-OCR/tesseract.exe"
+GESPIDIEFFE_PDFTOTEXT_BIN="C:/poppler-25.12.0/Library/bin/pdftotext.exe"
+GESPIDIEFFE_PDFIMAGES_BIN="C:/poppler-25.12.0/Library/bin/pdfimages.exe"
+GESPIDIEFFE_PDFINFO_BIN="C:/poppler-25.12.0/Library/bin/pdfinfo.exe"
+GESPIDIEFFE_GS_BIN="C:/Program Files/gs/gs10.07.0/bin/gswin64c.exe"
 ```
 
 ---
@@ -62,16 +100,21 @@ apt-get install -y ghostscript qpdf pdftk
 
 | Voce | Valore |
 |---|---|
-| Sistema operativo | WSL Ubuntu 18.04 su Windows 10 Home |
-| Shell | bash (sintassi Unix) |
-| PHP | 8.1 |
+| Sistema operativo | Windows 10 Home — Laragon standalone |
+| PHP | 8.1 (Laragon) |
 | Framework | Laravel 9 |
 | Frontend | Tailwind CSS, Alpine.js, Vite 4 |
-| Database | MariaDB 10 (Docker/Sail) |
-| Cache | Redis (Docker/Sail) |
-| App URL | http://localhost |
-| Adminer | http://localhost:8087 |
-| Vite dev server | porta 5174 |
+| Database | MariaDB (Laragon) |
+| App URL | http://develsolution.test |
+
+### Ambiente di produzione
+
+| Voce | Valore |
+|---|---|
+| Sistema operativo | AlmaLinux 8.10 standalone |
+| Web server | Apache + PHP-FPM (utente `apache`) |
+| PHP | 8.x |
+| App path | `/var/www/develsolution` |
 
 ---
 
@@ -103,11 +146,13 @@ In `config/app.php`, aggiungere nella sezione `providers`:
 Elamacchia\Gespidieffe\GespidieffeServiceProvider::class,
 ```
 
-> Il package supporta anche l'auto-discovery tramite il campo `extra.laravel.providers` nel proprio `composer.json`.
+### 3. Eseguire le migration
 
-### 3. Verificare le dipendenze di sistema
+```bash
+php artisan migrate
+```
 
-Assicurarsi che `qpdf`, `ghostscript` e `pdftk` siano installati nel container (vedi sezione *Requisiti*).
+Crea le tabelle `gespidieffe_contatori` e `gespidieffe_storico_settimanale` per il sistema statistiche.
 
 ### 4. Creare la cartella per i file temporanei
 
@@ -115,12 +160,13 @@ Assicurarsi che `qpdf`, `ghostscript` e `pdftk` siano installati nel container (
 mkdir -p storage/app/gespidieffe/tmp
 ```
 
-La cartella viene usata per salvare i PDF caricati e i file elaborati durante le sessioni utente.
+### 5. Configurare lo scheduler
 
-### 5. Configurare lo scheduler (pulizia automatica)
+GespidiEffe registra automaticamente due task nello scheduler:
+- **Pulizia file temporanei**: ogni ora, rimuove file > 24h
+- **Azzeramento contatori**: ogni notte alle 00:00 (giornaliero) e ogni lunedì (settimanale)
 
-GespidiEffe registra automaticamente un task nello scheduler di Laravel che rimuove ogni ora i file temporanei più vecchi di 24 ore.
-Assicurarsi che il cron di Laravel sia attivo sul server:
+Assicurarsi che il cron di Laravel sia attivo:
 
 ```bash
 * * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1
@@ -132,15 +178,16 @@ Assicurarsi che il cron di Laravel sia attivo sul server:
 
 | Comando | Descrizione |
 |---|---|
-| `php artisan gespidieffe:pulisci-tmp` | Elimina i file temporanei più vecchi di 24 ore (default) |
+| `php artisan gespidieffe:pulisci-tmp` | Elimina i file temporanei più vecchi di 24 ore |
 | `php artisan gespidieffe:pulisci-tmp --ore=48` | Elimina i file più vecchi di N ore |
+| `php artisan gespidieffe:azzera-contatori` | Azzera contatori giornalieri/settimanali e salva storico |
 
 ---
 
 ## Route
 
-Tutte le route sono protette dal middleware `['web', 'auth:sanctum', 'verified']`.
 Prefix URI: `/gespidieffe` — Named prefix: `gespidieffe.`
+Le route sono pubbliche (middleware `web`) tranne `/gespidieffe/statistiche` che richiede `auth:sanctum` + `verified` + `permission:usa gespidieffe`.
 
 | Metodo | URI | Nome route |
 |---|---|---|
@@ -188,34 +235,58 @@ Prefix URI: `/gespidieffe` — Named prefix: `gespidieffe.`
 | GET | `/gespidieffe/numera/download/{file}` | `gespidieffe.numera.download` |
 | DELETE/POST | `/gespidieffe/numera/elimina/{file}` | `gespidieffe.numera.elimina` |
 | GET | `/gespidieffe/numera/pdf/{file}` | `gespidieffe.numera.pdf` |
+| GET | `/gespidieffe/unisci-organizza` | `gespidieffe.unisciorganizza` |
+| POST | `/gespidieffe/unisci-organizza/upload` | `gespidieffe.unisciorganizza.upload` |
+| GET | `/gespidieffe/unisci-organizza/editor-merge/{session}` | `gespidieffe.unisciorganizza.editor-merge` |
+| POST | `/gespidieffe/unisci-organizza/applica-merge` | `gespidieffe.unisciorganizza.applica-merge` |
+| GET | `/gespidieffe/unisci-organizza/editor-organizza/{session}` | `gespidieffe.unisciorganizza.editor-organizza` |
+| POST | `/gespidieffe/unisci-organizza/applica-organizza` | `gespidieffe.unisciorganizza.applica-organizza` |
+| GET | `/gespidieffe/unisci-organizza/download/{file}` | `gespidieffe.unisciorganizza.download` |
+| DELETE/POST | `/gespidieffe/unisci-organizza/elimina/{session}` | `gespidieffe.unisciorganizza.elimina` |
+| GET | `/gespidieffe/pdf2word` | `gespidieffe.pdf2word` |
+| POST | `/gespidieffe/pdf2word/upload` | `gespidieffe.pdf2word.upload` |
+| GET | `/gespidieffe/pdf2word/confirm/{file}` | `gespidieffe.pdf2word.confirm` |
+| POST | `/gespidieffe/pdf2word/applica` | `gespidieffe.pdf2word.applica` |
+| GET | `/gespidieffe/pdf2word/download/{file}` | `gespidieffe.pdf2word.download` |
+| DELETE/POST | `/gespidieffe/pdf2word/elimina/{file}` | `gespidieffe.pdf2word.elimina` |
+| GET | `/gespidieffe/statistiche` | `gespidieffe.statistiche` |
+
+---
+
+## Sistema statistiche
+
+Traccia le elaborazioni per ogni funzione con contatori giornaliero, settimanale e globale.
+
+### Tabelle DB
+- `gespidieffe_contatori` — un record per servizio
+- `gespidieffe_storico_settimanale` — storico dei valori settimanali
+
+### Servizi tracciati
+`censura`, `merge`, `split`, `organizza`, `ruota`, `numera`, `unisci_organizza`, `pdf2word`
+
+### Azzeramento automatico
+- **Giornaliero**: ogni notte alle 00:00
+- **Settimanale**: ogni lunedì alle 00:00 (con salvataggio storico)
+- **Globale**: non si azzera mai
 
 ---
 
 ## Architettura: flusso multi-step
 
-Ogni funzione segue questo schema a cinque fasi:
+Ogni funzione segue questo schema:
 
 ```
-1. Upload      → validazione → salva in storage/app/gespidieffe/tmp/{uuid}.pdf
-                              → redirect all'editor
-
-2. Editor      → anteprima pagine con PDF.js (client-side)
-                              → Alpine.js per interazione utente
-
-3. Elaborazione → POST con parametri operazione
-                              → manipolazione server-side (qpdf / Ghostscript / TCPDF / pdftk)
-                              → risposta JSON con { download_token }
-
+1. Upload      → validazione → salva in storage/app/gespidieffe/tmp/{uuid}.pdf → redirect
+2. Editor      → anteprima pagine con PDF.js (client-side) + Alpine.js
+3. Elaborazione → POST → manipolazione server-side → JSON { download_token }
 4. Download    → GET con token → response()->download()
-
-5. Pulizia     → DELETE/POST elimina file della sessione
-                              → scheduler rimuove automaticamente file > 24h
+5. Pulizia     → DELETE/POST elimina file sessione + scheduler rimuove file > 24h
 ```
 
-### File temporanei
-
-- Cartella: `storage/app/gespidieffe/tmp/`
-- Naming: `{uuid}.pdf` (originale), `{uuid}_<suffisso>.pdf` (output elaborato)
+**PDF to Word** ha un flusso semplificato senza editor:
+```
+1. Upload → 2. Conferma (rilevamento tipo PDF) → 3. Conversione → 4. Download
+```
 
 ---
 
@@ -227,7 +298,16 @@ package/gespidieffe/
 └── src/
     ├── GespidieffeServiceProvider.php
     ├── Console/
-    │   └── PulisciTmpCommand.php
+    │   ├── PulisciTmpCommand.php
+    │   └── AzzeraContatoriCommand.php
+    ├── database/migrations/
+    │   ├── ..._create_gespidieffe_contatori_table.php
+    │   └── ..._create_gespidieffe_storico_settimanale_table.php
+    ├── Models/
+    │   ├── GespidieffeContatore.php
+    │   └── GespidieffeStoricoSettimanale.php
+    ├── Services/
+    │   └── ContatorePdfService.php
     ├── Http/Controllers/
     │   ├── GespidieffeController.php
     │   ├── CensuraPdfController.php
@@ -235,30 +315,26 @@ package/gespidieffe/
     │   ├── SplitPdfController.php
     │   ├── OrganizzaPdfController.php
     │   ├── RuotaPdfController.php
-    │   └── NumeraPdfController.php
+    │   ├── NumeraPdfController.php
+    │   ├── UnisciOrganizzaController.php
+    │   ├── PdfToWordController.php
+    │   └── StatisticheController.php
     ├── routes/
     │   └── web.php
     └── resources/views/
         ├── layouts/app.blade.php
         ├── home.blade.php
         ├── censura/
-        │   ├── upload.blade.php
-        │   └── editor.blade.php
         ├── merge/
-        │   ├── upload.blade.php
-        │   └── editor.blade.php
         ├── split/
-        │   ├── upload.blade.php
-        │   └── editor.blade.php
         ├── organizza/
-        │   ├── upload.blade.php
-        │   └── editor.blade.php
         ├── ruota/
-        │   ├── upload.blade.php
-        │   └── editor.blade.php
-        └── numera/
-            ├── upload.blade.php
-            └── editor.blade.php
+        ├── numera/
+        ├── unisciorganizza/
+        ├── pdftoword/
+        │   └── upload.blade.php
+        └── statistiche/
+            └── index.blade.php
 ```
 
 ---

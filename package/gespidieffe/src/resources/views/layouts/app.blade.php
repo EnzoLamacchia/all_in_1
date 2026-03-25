@@ -100,6 +100,19 @@
                             <span class="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0"></span>
                             Numera pagine
                         </a>
+                        <a href="{{ route('gespidieffe.unisciorganizza') }}"
+                           class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700
+                                  hover:bg-orange-50 hover:text-orange-700 transition-colors">
+                            <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#f97316"></span>
+                            Unisci e Organizza
+                        </a>
+                        <a href="{{ route('gespidieffe.pdf2word') }}"
+                           class="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 transition-colors"
+                           onmouseenter="this.style.background='#f0fdfa'; this.style.color='#0f766e'"
+                           onmouseleave="this.style.background=''; this.style.color=''">
+                            <span class="w-2 h-2 rounded-full flex-shrink-0" style="background:#0d9488"></span>
+                            PDF to Word
+                        </a>
                         @auth
                             @if (auth()->user()->can('usa gespidieffe'))
                                 <div class="border-t border-gray-100 my-1"></div>
