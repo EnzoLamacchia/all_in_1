@@ -17,34 +17,49 @@ Da leggere all'inizio di ogni sessione di lavoro su questo package.
 
 | Voce | Valore |
 |---|---|
-| Sistema operativo | WSL Ubuntu 18.04 su Windows 10 Home |
-| Shell | bash (sintassi Unix) |
-| PHP | 8.1 |
+| Sistema operativo | Windows 10 Home — Laragon standalone |
+| Shell | bash (sintassi Unix in Claude, CMD/PowerShell per tool di sistema) |
+| PHP | 8.1 (Laragon) |
 | Framework | Laravel 9 |
 | Frontend | Tailwind CSS, Alpine.js, Vite 4 |
-| Database | MariaDB 10 (Docker/Sail) |
-| Cache | Redis (Docker/Sail) |
-| App URL | http://localhost |
-| Adminer | http://localhost:8087 |
-| Vite dev | porta 5174 |
+| Database | MariaDB (Laragon) |
+| App URL | http://develsolution.test |
 
 ### Comandi principali
 
 ```bash
-./vendor/bin/sail up -d          # avvia Docker
-./vendor/bin/sail down           # ferma Docker
-./vendor/bin/sail artisan migrate
-./vendor/bin/sail artisan db:seed
-npm run build                    # compila asset
-npm run dev                      # Vite dev server
-./vendor/bin/sail artisan test
-./vendor/bin/sail composer pint  # formattazione codice
+php artisan migrate
+php artisan db:seed
+npm run build        # compila asset
+npm run dev          # Vite dev server
+php artisan test
+composer pint        # formattazione codice
 ```
 
-### Strumenti di sistema richiesti (nel container Docker)
+### Strumenti di sistema richiesti (installati su Windows/Laragon)
 
 - `qpdf` — manipolazione PDF (conteggio pagine, estrazione, merge, rotazione)
-- `gs` (Ghostscript) — rasterizzazione pagine PDF in PNG
+- `gs` / `gswin64c` (Ghostscript) — rasterizzazione pagine PDF in PNG — `C:/Program Files/gs/gs10.07.0/bin/gswin64c.exe`
+- `pdftk` — overlay/stamp PDF
+- `python` (Laragon) — `C:/laragon8/bin/python/python-3.13/python.exe` — con `pdf2docx` installato via pip
+- `tesseract` — OCR — `C:/Program Files/Tesseract-OCR/tesseract.exe` — con lang pack `ita`
+- `pdftotext` / `pdfimages` / `pdfinfo` (Poppler) — `C:/poppler-25.12.0/Library/bin/`
+- `pandoc` — conversione testo → docx
+- `soffice` (LibreOffice headless) — `C:/Program Files/LibreOffice/program/soffice.exe`
+
+### Variabili .env richieste per PDF to Word
+
+```env
+GESPIDIEFFE_PYTHON_BIN="C:/laragon8/bin/python/python-3.13/python.exe"
+GESPIDIEFFE_LIBREOFFICE_BIN="C:/Program Files/LibreOffice/program/soffice.exe"
+GESPIDIEFFE_TESSERACT_BIN="C:/Program Files/Tesseract-OCR/tesseract.exe"
+GESPIDIEFFE_PDFTOTEXT_BIN="C:/poppler-25.12.0/Library/bin/pdftotext.exe"
+GESPIDIEFFE_PDFIMAGES_BIN="C:/poppler-25.12.0/Library/bin/pdfimages.exe"
+GESPIDIEFFE_PDFINFO_BIN="C:/poppler-25.12.0/Library/bin/pdfinfo.exe"
+GESPIDIEFFE_GS_BIN="C:/Program Files/gs/gs10.07.0/bin/gswin64c.exe"
+```
+
+**NOTA**: i path nel `.env` devono usare forward slash (`/`) non backslash — altrimenti il parser dotenv di Laravel genera errore "unexpected escape sequence".
 
 ---
 
@@ -74,7 +89,9 @@ package/gespidieffe/
     │   ├── OrganizzaPdfController.php
     │   ├── RuotaPdfController.php
     │   ├── NumeraPdfController.php
-    │   └── StatisticheController.php            ← NUOVO
+    │   ├── UnisciOrganizzaController.php
+    │   ├── PdfToWordController.php              ← NUOVO
+    │   └── StatisticheController.php
     ├── routes/
     │   └── web.php
     └── resources/views/
@@ -98,8 +115,14 @@ package/gespidieffe/
         ├── numera/
         │   ├── upload.blade.php
         │   └── editor.blade.php
+        ├── pdftoword/
+        │   └── upload.blade.php                 ← NUOVO (step 1 + 2 + 3 in unico file)
+        ├── unisciorganizza/
+        │   ├── upload.blade.php
+        │   ├── editor-merge.blade.php
+        │   └── editor-organizza.blade.php
         └── statistiche/
-            └── index.blade.php                  ← NUOVO
+            └── index.blade.php
 ```
 
 ### Percorso assoluto (WSL)
@@ -182,6 +205,12 @@ Prefix: `/gespidieffe` — Named prefix: `gespidieffe.`
 | DELETE/POST | `/gespidieffe/numera/elimina/{file}` | `NumeraPdfController@elimina` | `gespidieffe.numera.elimina` |
 | GET | `/gespidieffe/numera/pdf/{file}` | `NumeraPdfController@servePdf` | `gespidieffe.numera.pdf` |
 | GET | `/gespidieffe/statistiche` | `StatisticheController@index` | `gespidieffe.statistiche` |
+| GET | `/gespidieffe/pdf2word` | `PdfToWordController@index` | `gespidieffe.pdf2word` |
+| POST | `/gespidieffe/pdf2word/upload` | `PdfToWordController@upload` | `gespidieffe.pdf2word.upload` |
+| GET | `/gespidieffe/pdf2word/confirm/{file}` | `PdfToWordController@confirm` | `gespidieffe.pdf2word.confirm` |
+| POST | `/gespidieffe/pdf2word/applica` | `PdfToWordController@applica` | `gespidieffe.pdf2word.applica` |
+| GET | `/gespidieffe/pdf2word/download/{file}` | `PdfToWordController@download` | `gespidieffe.pdf2word.download` |
+| DELETE/POST | `/gespidieffe/pdf2word/elimina/{file}` | `PdfToWordController@elimina` | `gespidieffe.pdf2word.elimina` |
 
 ---
 
@@ -213,6 +242,8 @@ Ogni funzione del package segue questo schema:
 | Organizza pagine | ✅ Implementata | `OrganizzaPdfController` | Griglia drag&drop (Sortable.js) + duplica/elimina + spostamento singolo e blocchi multipli (Ctrl+click) + qpdf ricostruzione. DOM card gestito interamente da JS (no x-for), stesso pattern del merge. |
 | Ruota pagine | ✅ Implementata | `RuotaPdfController` | Click per +90°/card, "Ruota tutto", badge gradi, qpdf --rotate |
 | Numera pagine | ✅ Implementata | `NumeraPdfController` | TCPDF overlay + pdftk stamp, testo originale selezionabile; controlli editor centrati nella colonna sinistra |
+| Unisci e Organizza | ✅ Implementata | `UnisciOrganizzaController` | Flusso in due step: merge multi-file poi riorganizzazione pagine del risultato |
+| PDF to Word | ✅ Implementata | `PdfToWordController` | Rilevamento automatico tipo PDF (nativo/ibrido/scansionato), conversione con pdf2docx / pdftotext+Pandoc / Tesseract+Ghostscript+LibreOffice. Flusso: upload → conferma+tipo → conversione → download |
 
 ---
 
@@ -240,6 +271,16 @@ Implementato sistema di tracciamento delle elaborazioni PDF per funzione.
 - `Services/ContatorePdfService::incrementa(string $servizio)` — chiamato da ogni controller nel metodo `applica()`
 - `Console/AzzeraContatoriCommand` — schedulato `dailyAt('00:00')` nel ServiceProvider
 - Route `/gespidieffe/statistiche` — protetta da `auth:sanctum` + `verified` + `permission:usa gespidieffe`
+
+## PDF to Word — note tecniche
+
+- **Rilevamento tipo PDF**: `rilevaTipoPdf()` usa `qpdf --show-npages` + `pdfinfo` + `pdfimages -list` + `pdftotext` per classificare in `nativo` / `ibrido` / `scansionato`
+- **Nativo** → `pdf2docx` (Python) via `exec()` — preserva layout, tabelle, immagini
+- **Ibrido** → `pdftotext -layout` per estrarre testo OCR invisibile già presente → `pandoc` per produrre `.docx`
+- **Scansionato** → `gswin64c` rasterizza ogni pagina a 300 DPI → `tesseract -l ita+eng` fa OCR → `soffice --headless --convert-to docx` assembla il `.docx`
+- **Output**: `{uuid}_pdf2word.docx` in `storage/app/gespidieffe/tmp/`
+- **PHP non trova i binari di sistema**: su Windows il processo PHP (Laragon) non eredita il PATH di sistema. Tutti i binari vanno specificati con percorso assoluto nel `.env` usando forward slash
+- **Python da usare**: `C:/laragon8/bin/python/python-3.13/python.exe` (bundled con Laragon, ha pdf2docx installato). Il `python` di sistema su Windows punta allo stub Microsoft Store → exit code 9009
 
 ## Prossimo obiettivo
 

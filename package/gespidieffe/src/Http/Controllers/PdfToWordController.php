@@ -85,7 +85,11 @@ class PdfToWordController extends Controller
 
         abort_if($outPath === null || ! file_exists($outPath), 500, 'Conversione fallita. Verificare che LibreOffice e Tesseract siano installati.');
 
-        (new ContatorePdfService())->incrementa('pdf2word');
+        try {
+            (new ContatorePdfService())->incrementa('pdf2word');
+        } catch (\Throwable) {
+            // Il contatore non deve bloccare il download
+        }
 
         return response()->json([
             'download_token' => $uuid . '_pdf2word',
@@ -310,8 +314,11 @@ class PdfToWordController extends Controller
     {
         putenv('HOME=/tmp');
 
-        $null   = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
-        $tmpDir = sys_get_temp_dir() . '/gespidieffe_ocr_' . $uuid;
+        $null      = PHP_OS_FAMILY === 'Windows' ? 'NUL' : '/dev/null';
+        $tmpDir    = sys_get_temp_dir() . '/gespidieffe_ocr_' . $uuid;
+        $gs        = env('GESPIDIEFFE_GS_BIN', PHP_OS_FAMILY === 'Windows' ? 'gs' : trim(shell_exec('which gs 2>/dev/null') ?: '/usr/bin/gs'));
+        $tesseract = env('GESPIDIEFFE_TESSERACT_BIN', PHP_OS_FAMILY === 'Windows' ? 'tesseract' : trim(shell_exec('which tesseract 2>/dev/null') ?: '/usr/bin/tesseract'));
+        $soffice   = env('GESPIDIEFFE_LIBREOFFICE_BIN', PHP_OS_FAMILY === 'Windows' ? 'libreoffice' : trim(shell_exec('which soffice 2>/dev/null') ?: '/usr/bin/soffice'));
         @mkdir($tmpDir, 0755, true);
 
         // Conta le pagine con qpdf
@@ -330,7 +337,8 @@ class PdfToWordController extends Controller
             // Rasterizza la pagina in PNG a 300 DPI
             $pngPath = $tmpDir . '/pagina_' . $p . '.png';
             $cmdGs   = sprintf(
-                'gs -dNOPAUSE -dBATCH -sDEVICE=png16m -r300 -dFirstPage=%d -dLastPage=%d -sOutputFile=%s %s 2>' . $null,
+                '%s -dNOPAUSE -dBATCH -sDEVICE=png16m -r300 -dFirstPage=%d -dLastPage=%d -sOutputFile=%s %s 2>' . $null,
+                escapeshellarg($gs),
                 $p,
                 $p,
                 escapeshellarg($pngPath),
@@ -345,7 +353,8 @@ class PdfToWordController extends Controller
             // OCR con Tesseract (ita + eng per documenti misti)
             $ocrBase = $tmpDir . '/ocr_' . $p;
             $cmdTes  = sprintf(
-                'tesseract %s %s -l ita+eng 2>' . $null,
+                '%s %s %s -l ita+eng 2>' . $null,
+                escapeshellarg($tesseract),
                 escapeshellarg($pngPath),
                 escapeshellarg($ocrBase)
             );
@@ -365,7 +374,8 @@ class PdfToWordController extends Controller
 
         // Converti il .txt in .docx con LibreOffice
         $cmdLo = sprintf(
-            'libreoffice --headless --convert-to docx %s --outdir %s 2>' . $null,
+            '%s --headless --convert-to docx %s --outdir %s 2>' . $null,
+            escapeshellarg($soffice),
             escapeshellarg($txtTmp),
             escapeshellarg($tmpDir)
         );
